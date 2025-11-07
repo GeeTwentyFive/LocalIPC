@@ -3,87 +3,75 @@
 #include <iostream>
 #include <string>
 
-#if defined(__linux__) or defined(unix)
+#if defined(__linux__) || defined(unix)
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 
 #elif defined(_WIN32)
 #include <winsock2.h>
+#include <ws2tcpip.h>
+
+#typedef int socklen_t
+#typedef long int ssize_t
 
 #endif
 
 
 namespace LocalIPC {
-        class Server : public _Common {
-        public:
-                Server(uint16_t port) : _Common(port) {
-#if defined(__linux__) or defined(unix)
-                        // TODO
+        namespace {
+                static inline void Error(const char* msg) {
+                        throw std::runtime_error(
+                                std::string("ERROR: ") + msg
+#if defined(__linux__) || defined(unix)
+                                + ", with errno: " + std::to_string(errno)
 
 #elif defined(_WIN32)
-                        // TODO
+                                + ", with WSAGetLastError() code: " + std::to_string(WSAGetLastError())
 
 #endif
+                        );
                 }
-        };
-
-        class Client : public _Common {
-        public:
-                Client(uint16_t port) : _Common(port) {
-#if defined(__linux__) or defined(unix)
-                        // TODO
-
-#elif defined(_WIN32)
-                        // TODO
-
-#endif
-                }
-        };
+        }
 
 
 
         class _Common {
 
         protected:
-#if defined(__linux__) or defined(unix)
-                        int sock;
-
-#elif defined(_WIN32)
-                        SOCKET sock = INVALID_SOCKET;
-
-#endif
+                int sock;
+                struct sockaddr_in address = {0};
 
 
 
         public:
                 _Common(uint16_t port) {
-#if defined(__linux__) or defined(unix)
-                        this->sock = socket(AF_INET, SOCK_STREAM, 0);
-                        if (this->sock == -1) throw std::runtime_error(
-                                std::string("ERROR: Failed to create socket, with errno: ") + std::to_string(errno)
-                        );
-
-                        // TODO
-
-#elif defined(_WIN32)
+#if defined(_WIN32)
                         WSADATA wsaData;
                         int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
                         if (result != 0) throw std::runtime_error(
                                 std::string("ERROR: Failed to initialize Winsock, with WSAGetLastError() code: ") + std::to_string(WSAGetLastError())
                         );
-
-                        this->sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-                        if (this->sock == INVALID_SOCKET) throw std::runtime_error(
-                                std::string("ERROR: Failed to create socket, with WSAGetLastError() code: ") + std::to_string(WSAGetLastError())
-                        );
-
 #endif
+
+                        this->sock = socket(AF_INET, SOCK_STREAM, 0);
+#if defined(_WIN32)
+                        if (this->sock == INVALID_SOCKET)
+#else
+                        if (this->sock == -1)
+#endif
+                                Error("Failed to create socket");
+
+                        address.sin_family = AF_INET;
+                        address.sin_port = htons(port);
+                        address.sin_addr.s_addr = inet_addr("127.0.0.1");
                 }
 
 
 
-                ~_Common() {
-#if defined(__linux__) or defined(unix)
+                virtual ~_Common() {
+#if defined(__linux__) || defined(unix)
                         close(this->sock);
 
 #elif defined(_WIN32)
@@ -130,5 +118,35 @@ namespace LocalIPC {
 
 
 
+        };
+
+
+
+        class Server : public _Common {
+        public:
+                Server(uint16_t port) : _Common(port) {
+                        int result;
+
+                        result = bind(sock, (struct sockaddr*)&address, sizeof(address));
+                        if (result == -1) Error("Failed to bind server to provided port");
+
+                        result = listen(sock, 1);
+                        if (result == -1) Error("listen() failed on server");
+
+                        socklen_t address_len = sizeof(address);
+                        sock = accept(sock, (struct sockaddr*)&address, &address_len);
+                }
+        };
+
+
+
+        class Client : public _Common {
+        public:
+                Client(uint16_t port) : _Common(port) {
+                        int result;
+
+                        result = connect(sock, (struct sockaddr*)&address, sizeof(address));
+                        if (result == -1) Error("Failed to connect to provided port on local host");
+                }
         };
 }
