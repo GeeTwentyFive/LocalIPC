@@ -58,8 +58,8 @@ namespace LocalIPC {
         public:
                 _Common(uint16_t port) {
 #if defined(__linux__) or defined(unix)
-                        sock = socket(AF_INET, SOCK_STREAM, 0);
-                        if (sock == -1) throw std::runtime_error(
+                        this->sock = socket(AF_INET, SOCK_STREAM, 0);
+                        if (this->sock == -1) throw std::runtime_error(
                                 std::string("ERROR: Failed to create socket, with errno: ") + std::to_string(errno)
                         );
 
@@ -72,8 +72,8 @@ namespace LocalIPC {
                                 std::string("ERROR: Failed to initialize Winsock, with WSAGetLastError() code: ") + std::to_string(WSAGetLastError())
                         );
 
-                        sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-                        if (sock == INVALID_SOCKET) throw std::runtime_error(
+                        this->sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+                        if (this->sock == INVALID_SOCKET) throw std::runtime_error(
                                 std::string("ERROR: Failed to create socket, with WSAGetLastError() code: ") + std::to_string(WSAGetLastError())
                         );
 
@@ -84,38 +84,46 @@ namespace LocalIPC {
 
                 ~_Common() {
 #if defined(__linux__) or defined(unix)
-                        close(sock);
+                        close(this->sock);
 
 #elif defined(_WIN32)
-                        WSACleanup();
+                        closesocket(this->sock);
 
 #endif
                 }
 
 
 
-                void Send(std::vector<uint8_t> data) {
-                        int result = send(sock, (const char*)data.data(), data.size(), 0);
-                        if (result == -1) throw std::runtime_error(
-                                std::string("ERROR: Failed to send data")
-#if defined(__linux__) or defined(unix)
-                                + ", with errno: " + std::to_string(errno)
-
-#elif defined(_WIN32)
-                                + ", with WSAGetLastError() code: " + std::to_string(WSAGetLastError())
-
-#endif
-                        );
+                //
+                // Returns number of bytes sent, or -1 on error
+                //
+                int Send(std::vector<uint8_t> data) {
+                        data.insert(data.begin(), {
+                                (uint8_t)((data.size() >> 0) & 0xFF),
+                                (uint8_t)((data.size() >> 8) & 0xFF),
+                                (uint8_t)((data.size() >> 16) & 0xFF),
+                                (uint8_t)((data.size() >> 24) & 0xFF)
+                        });
+                        return send(this->sock, (const char*)data.data(), data.size(), 0);
                 }
 
 
 
-                std::vector<uint8_t> Recv(size_t amount) {
+                //
+                // Returns empty vector on error
+                //
+                std::vector<uint8_t> Recv() {
+                        ssize_t amount_read = 0;
+
+                        int data_size = 0;
+                        amount_read = recv(this->sock, &data_size, sizeof(int), 0);
+                        if (amount_read != sizeof(int)) return std::vector<uint8_t>();
+
                         std::vector<uint8_t> data;
-                        data.resize(amount);
+                        data.resize(data_size);
 
-                        ssize_t amount_read = recv(sock, data.data(), amount, MSG_WAITALL);
-                        if (amount_read != amount) return std::vector<uint8_t>();
+                        amount_read = recv(this->sock, data.data(), data_size, MSG_WAITALL);
+                        if (amount_read != data_size) return std::vector<uint8_t>();
 
                         return data;
                 }
