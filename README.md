@@ -1,5 +1,5 @@
 # Usage
-1) `#include <LocalIPC.hpp>`
+1) `#include "LocalIPC.hpp"`
 2) `LocalIPC::Server server(<PORT>)` or `LocalIPC::Client client(<PORT>)`
 3) `.Send(data)` / `data = .Recv()`
 
@@ -7,7 +7,7 @@
 Server:
 ```
 #include <iostream>
-#include <LocalIPC.hpp>
+#include "LocalIPC.hpp"
 
 int main() {
         LocalIPC::Server server(55555);
@@ -23,7 +23,7 @@ int main() {
 
 Client:
 ```
-#include <LocalIPC.hpp>
+#include "LocalIPC.hpp"
 
 int main() {
         LocalIPC::Client client(55555);
