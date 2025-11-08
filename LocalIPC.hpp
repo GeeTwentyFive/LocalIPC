@@ -3,6 +3,8 @@
 #include <iostream>
 #include <string>
 
+#define EXPORT
+
 #if defined(__linux__) || defined(unix)
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -10,11 +12,16 @@
 #include <unistd.h>
 
 #elif defined(_WIN32)
+#ifdef LOCAL_IPC_EXPORT_SHARED_LIB
+#undef EXPORT
+#define EXPORT __declspec(dllexport)
+#endif
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
-#typedef int socklen_t
-#typedef long int ssize_t
+typedef int socklen_t;
+typedef long int ssize_t;
 
 #endif
 
@@ -37,7 +44,7 @@ namespace LocalIPC {
 
 
 
-        class _Common {
+        class EXPORT _Common {
 
         protected:
                 int sock;
@@ -122,7 +129,7 @@ namespace LocalIPC {
 
 
 
-        class Server : public _Common {
+        class EXPORT Server : public _Common {
         public:
                 Server(uint16_t port) : _Common(port) {
                         int result;
@@ -140,7 +147,7 @@ namespace LocalIPC {
 
 
 
-        class Client : public _Common {
+        class EXPORT Client : public _Common {
         public:
                 Client(uint16_t port) : _Common(port) {
                         int result;
